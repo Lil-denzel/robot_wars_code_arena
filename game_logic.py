@@ -1,199 +1,140 @@
 import random
-
-# Arena dimensions (adjust as needed)
-ARENA_WIDTH = 10
-ARENA_HEIGHT = 10
-
-# Actions a bot can take
-ACTIONS = ['move_up', 'move_down', 'move_left', 'move_right', 'shoot']
-
-# Game state
-class GameState:
-    def __init__(self):
-        self.robots = []
-        self.projectiles = []
-        self.turns = 0
-    
-    def add_robot(self, robot):
-        self.robots.append(robot)
-    
-    def remove_robot(self, robot):
-        self.robots.remove(robot)
-
-    def next_turn(self):
-        self.turns += 1
-
-# Position handling
-def is_within_bounds(x, y):
-    return 0 <= x < ARENA_WIDTH and 0 <= y < ARENA_HEIGHT
-
-class Robot:
-    def __init__(self, name, x=None, y=None):
-        self.name = name
-        self.hp = 100
-        self.x = x if x is not None else random.randint(0, ARENA_WIDTH - 1)
-        self.y = y if y is not None else random.randint(0, ARENA_HEIGHT - 1)
-
-    def take_action(self, action, game_state):
-        if action == 'move_up' and is_within_bounds(self.x, self.y - 1):
-            self.y -= 1
-        elif action == 'move_down' and is_within_bounds(self.x, self.y + 1):
-            self.y += 1
-        elif action == 'move_left' and is_within_bounds(self.x - 1, self.y):
-            self.x -= 1
-        elif action == 'move_right' and is_within_bounds(self.x + 1, self.y):
-            self.x += 1
-        elif action == 'shoot':
-            for robot in game_state.robots:
-                if robot != self and (robot.x == self.x or robot.y == self.y):
-                    robot.hp -= 20
-                    print(f"{self.name} shot {robot.name}!")
-        else:
-            print(f"{self.name} did nothing...")
-
-    def is_alive(self):
-        return self.hp > 0
-
-def simulate_game():
-    game_state = GameState()
-
-    # Create robots
-    bot1 = Robot("Bot-A")
-    bot2 = Robot("Bot-B")
-    game_state.add_robot(bot1)
-    game_state.add_robot(bot2)
-
-    print("Starting Robot Wars!")
-
-    # Game loop
-    while len([r for r in game_state.robots if r.is_alive()]) > 1:
-        game_state.next_turn()
-        print(f"\n--- Turn {game_state.turns} ---")
-        
-        for robot in game_state.robots:
-            if robot.is_alive():
-                action = random.choice(ACTIONS)
-                robot.take_action(action, game_state)
-                print(f"{robot.name} ({robot.hp} HP) is at ({robot.x}, {robot.y})")
-
-    # Determine Winner
-    winner = [r for r in game_state.robots if r.is_alive()][0]
-    print(f"\n🏆 {winner.name} wins with {winner.hp} HP remaining!")
-
-if __name__ == "__main__":
-    simulate_game()
-import random
 import time
+import threading
 
-# Arena settings
-ARENA_SIZE = 10
-MAX_HEALTH = 100
+# Game settings
+POWER_UPS = ["speed_boost", "damage_boost", "shield", "health_pack", "invisibility", "nuke"]
+POWER_UP_SPAWN_INTERVAL = 10
+POWER_UP_DURATION = 5  # Seconds
+arena_power_ups = []
 
-# Directions: (dx, dy)
-DIRECTIONS = {
-    "UP": (0, -1),
-    "DOWN": (0, 1),
-    "LEFT": (-1, 0),
-    "RIGHT": (1, 0)
-}
+# Leaderboard to track bot performance
+leaderboard = {}
 
-# Obstacles
-OBSTACLE_COUNT = 10
+# Store connected bots
+bots = []
 
-# Timer per turn (in seconds)
-TURN_TIMER = 10
-
-class Robot:
+class Bot:
     def __init__(self, name):
         self.name = name
-        self.x = random.randint(0, ARENA_SIZE - 1)
-        self.y = random.randint(0, ARENA_SIZE - 1)
-        self.health = MAX_HEALTH
-        self.attack_power = 20
+        self.health = 100
+        self.max_health = 100
+        self.speed = 1
+        self.damage = 10
+        self.shield = False
+        self.invisible = False
+        self.x = random.randint(0, 100)
+        self.y = random.randint(0, 100)
+        leaderboard[name] = 0
 
-    def move(self, direction):
-        if direction in DIRECTIONS:
-            new_x = self.x + DIRECTIONS[direction][0]
-            new_y = self.y + DIRECTIONS[direction][1]
-
-            # Check arena boundaries
-            if 0 <= new_x < ARENA_SIZE and 0 <= new_y < ARENA_SIZE:
-                self.x = new_x
-                self.y = new_y
-                print(f"{self.name} moved {direction} to ({self.x}, {self.y})")
-            else:
-                print(f"Invalid move! {self.name} hit the wall at ({self.x}, {self.y})")
+    def make_move(self):
+        """Random bot movement."""
+        self.x += random.choice([-1, 0, 1]) * self.speed
+        self.y += random.choice([-1, 0, 1]) * self.speed
 
     def attack(self, target):
-        if abs(self.x - target.x) <= 1 and abs(self.y - target.y) <= 1:
-            target.health -= self.attack_power
-            print(f"{self.name} attacked {target.name} for {self.attack_power} damage! 💥")
+        """Attack another bot."""
+        if target.shield:
+            print(f"{target.name} blocked the attack with a shield! 🛡️")
+            target.shield = False
         else:
-            print(f"{self.name} missed! Target is too far away. 🎯")
+            target.health -= self.damage
+            print(f"{self.name} attacked {target.name}! 💥 Health: {target.health}")
+            if target.health <= 0:
+                print(f"{target.name} has been destroyed! ☠️")
+                leaderboard[self.name] += 1
 
-    def is_alive(self):
-        return self.health > 0
+def spawn_power_up():
+    """Randomly spawns power-ups."""
+    new_power_up = {
+        "type": random.choice(POWER_UPS),
+        "x": random.randint(0, 100),
+        "y": random.randint(0, 100)
+    }
+    arena_power_ups.append(new_power_up)
+    print(f"Power-up spawned: {new_power_up['type']} at ({new_power_up['x']}, {new_power_up['y']})")
 
-def create_obstacles():
-    obstacles = set()
-    while len(obstacles) < OBSTACLE_COUNT:
-        obstacle = (random.randint(0, ARENA_SIZE - 1), random.randint(0, ARENA_SIZE - 1))
-        obstacles.add(obstacle)
-    return obstacles
+def apply_power_up(bot, power_up):
+    """Applies power-ups to bots."""
+    if power_up["type"] == "speed_boost":
+        bot.speed += 2
+        print(f"{bot.name} got a Speed Boost! ⚡")
 
-def display_arena(robot1, robot2, obstacles):
-    for y in range(ARENA_SIZE):
-        row = ""
-        for x in range(ARENA_SIZE):
-            if (x, y) == (robot1.x, robot1.y):
-                row += "R1 "
-            elif (x, y) == (robot2.x, robot2.y):
-                row += "R2 "
-            elif (x, y) in obstacles:
-                row += "## "
-            else:
-                row += "-- "
-        print(row)
-    print("\n")
+    elif power_up["type"] == "damage_boost":
+        bot.damage *= 2
+        print(f"{bot.name} got a Damage Boost! 💥")
+
+    elif power_up["type"] == "shield":
+        bot.shield = True
+        print(f"{bot.name} got a Shield! 🛡️")
+
+    elif power_up["type"] == "health_pack":
+        bot.health = min(bot.max_health, bot.health + 20)
+        print(f"{bot.name} picked up a Health Pack! ❤️ (+20 health)")
+
+    elif power_up["type"] == "invisibility":
+        bot.invisible = True
+        print(f"{bot.name} turned Invisible! 🫥")
+
+    elif power_up["type"] == "nuke":
+        print(f"{bot.name} activated a Nuke! 💣 All other bots take 50 damage!")
+        for other_bot in bots:
+            if other_bot != bot:
+                other_bot.health -= 50
+                print(f"{other_bot.name} now has {other_bot.health} health.")
+
+def check_power_up_pickup(bot):
+    """Check if the bot is close enough to pick up a power-up."""
+    for power_up in arena_power_ups:
+        if abs(bot.x - power_up["x"]) <= 5 and abs(bot.y - power_up["y"]) <= 5:
+            apply_power_up(bot, power_up)
+            arena_power_ups.remove(power_up)
+            break
+
+def display_leaderboard():
+    """Display the current leaderboard."""
+    print("\n🏆 Leaderboard:")
+    for bot, score in leaderboard.items():
+        print(f"{bot}: {score} kills")
+    print("-" * 20)
 
 def game_loop():
-    robot1 = Robot("Robot 1")
-    robot2 = Robot("Robot 2")
-    obstacles = create_obstacles()
+    """Main game loop."""
+    last_power_up_time = time.time()
+    
+    while True:
+        # Spawn power-ups at intervals
+        if time.time() - last_power_up_time > POWER_UP_SPAWN_INTERVAL:
+            spawn_power_up()
+            last_power_up_time = time.time()
 
-    print("🚀 Welcome to Robot Wars: Code Arena! Let the battle begin! 🎉")
-    display_arena(robot1, robot2, obstacles)
+        # Bots take turns making moves
+        for bot in bots:
+            bot.make_move()
+            check_power_up_pickup(bot)
 
-    turn = 0
+        # Check if game is over
+        alive_bots = [b for b in bots if b.health > 0]
+        if len(alive_bots) == 1:
+            print(f"🏅 {alive_bots[0].name} wins the game!")
+            display_leaderboard()
+            break
 
-    while robot1.is_alive() and robot2.is_alive():
-        current_robot = robot1 if turn % 2 == 0 else robot2
+        time.sleep(0.5)  # Simulate game tick
 
-        print(f"\n{current_robot.name}'s turn! Health: {current_robot.health}")
-
-        start_time = time.time()
-        action = input("Choose action (move [UP/DOWN/LEFT/RIGHT], attack): ").upper()
-
-        if time.time() - start_time > TURN_TIMER:
-            print("⏰ Time's up! Skipping turn...")
-        elif action.startswith("MOVE "):
-            direction = action.split(" ")[1]
-            if (current_robot.x + DIRECTIONS.get(direction, (0, 0))[0],
-                current_robot.y + DIRECTIONS.get(direction, (0, 0))[1]) not in obstacles:
-                current_robot.move(direction)
-            else:
-                print("🚧 Obstacle ahead! Move blocked.")
-        elif action == "ATTACK":
-            current_robot.attack(robot2 if current_robot == robot1 else robot1)
-        else:
-            print("Invalid action. Turn skipped.")
-
-        display_arena(robot1, robot2, obstacles)
-        turn += 1
-
-    winner = robot1 if robot1.is_alive() else robot2
-    print(f"🏆 {winner.name} wins the battle!")
+# Multiplayer support — add bots to the game
+def add_bot(bot_name):
+    new_bot = Bot(bot_name)
+    bots.append(new_bot)
+    print(f"🤖 New bot added: {bot_name}")
 
 # Run the game
 if __name__ == "__main__":
-    game_loop()
+    print("🚀 Welcome to Robot Wars: Code Arena!")
+    add_bot("Alpha")
+    add_bot("Bravo")
+    add_bot("Charlie")
+
+    # Start the game in a separate thread so we can add features while it runs
+    game_thread = threading.Thread(target=game_loop)
+    game_thread.start()
