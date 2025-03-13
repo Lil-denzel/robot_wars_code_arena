@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Robot Wars: Code Arena ⚙️</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; text-align: center; }
+        #arena { width: 600px; height: 400px; border: 3px solid #333; margin: 20px auto; position: relative; background: #eee; }
+        .bot { width: 40px; height: 40px; position: absolute; border: 2px solid black; border-radius: 50%; }
+        .power-up { width: 20px; height: 20px; background: gold; border: 2px solid darkorange; border-radius: 50%; position: absolute; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Robot Wars: Code Arena ⚙️</h1>
+    <div id="arena"></div>
+    <button onclick="sendMove('up')">⬆️</button>
+    <br>
+    <button onclick="sendMove('left')">⬅️</button>
+    <button onclick="sendMove('right')">➡️</button>
+    <br>
+    <button onclick="sendMove('down')">⬇️</button>
+    <script>
+        const botId = "bot_" + Math.floor(Math.random() * 1000);
+        const ws = new WebSocket("ws://localhost:8765");
+
+        ws.onopen = () => console.log("Connected to the arena!");
+        ws.onmessage = (event) => {
+            const gameState = JSON.parse(event.data);
+            updateArena(gameState);
+        };
+        ws.onclose = () => console.log("Disconnected from the arena.");
+
+        function sendMove(direction) {
+            ws.send(JSON.stringify({ bot_id: botId, direction: direction }));
+        }
+
+        function updateArena(gameState) {
+            const arena = document.getElementById('arena');
+            arena.innerHTML = '';  // Clear the arena before updating
+
+            // Render Bots
+            for (const [id, bot] of Object.entries(gameState.bots)) {
+                const botElement = document.createElement('div');
+                botElement.className = 'bot';
+                botElement.style.left = (bot.x || 0) + 'px';
+                botElement.style.top = (bot.y || 0) + 'px';
+                botElement.style.background = botId === id ? 'blue' : 'red';
+                arena.appendChild(botElement);
+            }
+
+            // Render Power-ups
+            for (const powerUp of gameState.power_ups) {
+                const powerUpElement = document.createElement('div');
+                powerUpElement.className = 'power-up';
+                powerUpElement.style.left = powerUp.x + 'px';
+                powerUpElement.style.top = powerUp.y + 'px';
+                arena.appendChild(powerUpElement);
+            }
+        }
+    </script>
+</body>
+</html>

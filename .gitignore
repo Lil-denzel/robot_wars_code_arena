@@ -4,3 +4,29 @@ __pycache__/
 *.pyo
 .DS_Store
 *.log
+# .gitignore file for Python projects
+
+# Byte-compiled Python files
+*.py[cod]
+
+# Log files
+*.log
+
+# Virtual environment
+venv/
+
+# OS-specific files
+.DS_Store
+
+# IDE-specific files
+*.idea/
+*.vscode/
+
+# PyCharm-specific files
+*.pycharm/
+
+# Miscellaneous
+*.egg-info/
+*.egg/
+dist/
+build/
